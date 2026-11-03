@@ -25,7 +25,7 @@
     .fingerprint = 0x85a2128ed8d2b7ce, // Changing this has security and trust implications.
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
@@ -33,20 +33,20 @@
     // internet connectivity.
     .dependencies = .{
         .raylib_zig = .{
-            .url = "git+https://github.com/ShubhamVG/raylib-zig?ref=zig-0.16#f9acc67e9650a436983386d01ba85c37347d3473",
-            .hash = "raylib_zig-5.6.0-dev-KE8REJBmBQBHZ2KR0Nunp2i-raa5K9J5_PtJcOBck9To",
+            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#28bbe30112f605da918db00eff53a75ce1aa9180",
+            .hash = "raylib_zig-6.2.0-KE8RELGmBQDX1v1DqBN57pNxJ-b-MIa1S-M7NXT9Eplr",
         },
         .zigimg = .{
-            .url = "git+https://github.com/zigimg/zigimg.git#c7e81a13bff1cf4c5b7f085a8360f9d551143d40",
-            .hash = "zigimg-0.1.0-8_eo2uScFwCnpzB1Y2n_jf3euDfMEeCLxJE_E5_W5BNe",
+            .url = "git+https://github.com/zigimg/zigimg.git#083d0304840a3f5fd547c2e2005148a18886c401",
+            .hash = "zigimg-0.1.0-8_eo2j1pGAA3ArMKhXcipNR-tdjmeWmByLJhOff2A_X4",
         },
         .clap = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.12.0.tar.gz",
-            .hash = "clap-0.12.0-oBajB7foAQDqlSwaSG5g0yq7xGbQARUsBk5T64gAOqP5",
+            .url = "git+https://github.com/Hejsil/zig-clap#05faf3905e8548f5cc269a8836e154065e70128d",
+            .hash = "clap-0.12.0-oBajB4XpAQCF1WRKnD5KOKPsnwwT_NNdAJ7Ww3irYJac",
         },
         .nfd = .{
-            .url = "git+https://github.com/fabioarnold/nfd-zig.git#031b6b08c28b4c209fde1d7cfc2387aa956febb2",
-            .hash = "nfd-0.1.0-y82kbsSLBgBgSEauGFsHxH7RmcL4AEOqZEqOvA8-NEFq",
+            .url = "git+https://github.com/fabioarnold/nfd-zig.git#84b50f5a9d37476b6f1ff1da6ba8a38b22625023",
+            .hash = "nfd-0.1.0-y82kbjyOBgBoCjHiYoe_zCRInYH7UAWOmXrMiQaORnEp",
         },
     },
     .paths = .{
