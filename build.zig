@@ -4,8 +4,6 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // WARNING: zigimg does not work with self-hosted backend/without LLVM
-    // (https://codeberg.org/ziglang/zig/issues/31837)
     const no_llvm = b.option(bool, "no-llvm", "Disable LLVM") orelse false;
     const use_llvm = !no_llvm;
 
