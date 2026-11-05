@@ -4,8 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const no_llvm = b.option(bool, "no-llvm", "Disable LLVM") orelse false;
-    const use_llvm = !no_llvm;
+    const no_llvm = b.option(bool, "no-llvm", "Disable LLVM");
+    const use_llvm = if (no_llvm) |no_llvm_captured| !no_llvm_captured else null;
 
     const exe = b.addExecutable(.{
         .name = "uruzi",
