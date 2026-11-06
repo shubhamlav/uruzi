@@ -30,9 +30,6 @@ pub const NeighborMap = struct {
             const dist_x = radius;
             const dist_y = radius;
 
-            // const img_w_usize: usize = @intCast(img_w);
-            // const img_h_usize: usize = @intCast(img_h);
-
             const pix_y = pixel_idx / img_w;
             const pix_x = pixel_idx % img_w;
 

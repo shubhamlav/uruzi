@@ -58,6 +58,8 @@ pub fn main(init: std.process.Init) !void {
     );
     defer {
         state.unloadImage(gpa);
+        state.unloadEdgeBitmask(gpa);
+        state.unloadNeighbors(gpa);
         state.unloadParticles(gpa);
     }
 
@@ -66,7 +68,11 @@ pub fn main(init: std.process.Init) !void {
     }
 
     if (res.positionals[0]) |img_path| {
-        procImgAndUpdateError(gpa, io, rng, &state, img_path);
+        blk: {
+            loadImageAndUpdateError(gpa, io, &state, img_path) catch break :blk;
+            loadNeighborsAndUpdateError(gpa, &state) catch break :blk;
+            loadParticlesAndUpdateError(gpa, rng, &state) catch break :blk;
+        }
     }
 
     // Raylib and gui stuff
@@ -85,7 +91,7 @@ pub fn main(init: std.process.Init) !void {
     var particles_slider_val: f32 = @floatFromInt(state.particle_count);
     var dropdown_opened = false;
     var dropdown_idx_val: i32 = 0;
-    // var edge_tol_slider_val: f32 = @floatFromInt(state.edge_tolerance);
+    var edge_tol_slider_val: f32 = @floatFromInt(state.edge_tolerance);
 
     while (!rl.windowShouldClose()) {
         // INPUT HANDLING
@@ -93,7 +99,7 @@ pub fn main(init: std.process.Init) !void {
             state.anim_status = switch (state.anim_status) {
                 .playing => .paused,
                 .paused => .playing,
-                .none => .none,
+                .none => .none, // TODO: Why does this exist again?
             };
         }
 
@@ -165,8 +171,8 @@ pub fn main(init: std.process.Init) !void {
             state.unloadParticles(gpa);
             state.particle_count = @trunc(particles_slider_val);
 
-            if (state.image_loaded) {
-                loadParticlesAndUpdateError(gpa, rng, &state);
+            if (state.img != null) {
+                loadParticlesAndUpdateError(gpa, rng, &state) catch continue;
             }
         }
 
@@ -215,25 +221,31 @@ pub fn main(init: std.process.Init) !void {
             dropdown_opened = !dropdown_opened;
         }
 
-        // _ = rgui.groupBox(.{
-        //     .x = @floatFromInt(state.canvas_w + 10),
-        //     .y = 220.0,
-        //     .width = slider_box_w,
-        //     .height = slider_box_h,
-        // }, "Edge Tolerance"); // Edge tolerance container
-        // const edge_tol_being_edited = rgui.slider(.{
-        //     .x = btn_start_x,
-        //     .y = 220.0 + box_slider_pad,
-        //     .width = @floatFromInt(panel_width - 72),
-        //     .height = 20.0,
-        // }, "150", "250", &edge_tol_slider_val, 150.0, 250.0) != 0;
-        // if (edge_tol_being_edited) {
-        //     state.show_outline = true;
+        _ = rgui.groupBox(.{
+            .x = @floatFromInt(state.canvas_w + 10),
+            .y = 290.0,
+            .width = slider_box_w,
+            .height = slider_box_h,
+        }, "Edge Tolerance"); // Edge tolerance container
+        const edge_tol_being_edited = rgui.slider(.{
+            .x = btn_start_x,
+            .y = 290.0 + box_slider_pad,
+            .width = @floatFromInt(panel_width - 72),
+            .height = 20.0,
+        }, "150", "250", &edge_tol_slider_val, 150.0, 250.0) != 0;
+        if (edge_tol_being_edited) {
+            state.show_outline = true;
 
-        //     if (@as(u8, @trunc(edge_tol_slider_val)) != state.edge_tolerance) {
-        //         state.edge_tolerance = @trunc(edge_tol_slider_val);
-        //     }
-        // }
+            if (@as(u8, @trunc(edge_tol_slider_val)) != state.edge_tolerance) {
+                state.edge_tolerance = @trunc(edge_tol_slider_val);
+                state.unloadEdgeBitmask(gpa);
+                state.unloadNeighbors(gpa);
+                state.unloadParticles(gpa);
+
+                loadNeighborsAndUpdateError(gpa, &state) catch continue;
+                loadParticlesAndUpdateError(gpa, rng, &state) catch continue;
+            }
+        }
 
         const upload_btn_clicked = rgui.button(.{
             .x = btn_start_x,
@@ -242,17 +254,28 @@ pub fn main(init: std.process.Init) !void {
             .height = btn_h,
         }, "Upload Image"); // Upload Image Button
         if (upload_btn_clicked) {
-            // TODO: Add more supported formats.
+            // TODO: Add .webp support.
             // TODO: Get the footer to say "loading image".
-            const img_path = try nfd.openFileDialog("png,jpg,jpeg,qoi,bmp", null);
+            //
+            // NOTE: Instead of loading image here, the footer can be changed and the
+            // loop be "continued", and image will be fetched in the next loop cycle (probably after some 200 ms).
+            const img_path = try nfd.openFileDialog(
+                "png,jpg,jpeg,qoi,bmp,ppm,ff,ff.*,iff,pam,pbm,pcx,pgm,sgi,sun,tga,tif,tiff,xbm",
+                null,
+            );
             if (img_path != null) {
                 state.unloadImage(gpa);
+                state.unloadEdgeBitmask(gpa);
+                state.unloadNeighbors(gpa);
                 state.unloadParticles(gpa);
-                procImgAndUpdateError(gpa, io, rng, &state, img_path.?);
+
+                loadImageAndUpdateError(gpa, io, &state, img_path.?) catch continue;
+                loadNeighborsAndUpdateError(gpa, &state) catch continue;
+                loadParticlesAndUpdateError(gpa, rng, &state) catch continue;
             }
         }
 
-        if (state.image_loaded) {
+        if (state.img != null) {
             if (state.show_outline) {
                 const canvas_w_f32: f32 = @floatFromInt(state.canvas_w);
                 const canvas_h_f32: f32 = @floatFromInt(state.canvas_h);
@@ -261,7 +284,7 @@ pub fn main(init: std.process.Init) !void {
                 const cell_w: f32 = canvas_w_f32 / img_w_f32;
                 const cell_h: f32 = canvas_h_f32 / img_h_f32;
 
-                var iterator = state.img_bitmask.?.iterator(.{ .kind = .set });
+                var iterator = state.edge_bitmask.?.iterator(.{ .kind = .set });
                 while (iterator.next()) |idx| {
                     const idx_f32: f32 = @floatFromInt(idx);
                     const y: f32 = (idx_f32 / img_w_f32) * cell_h;
@@ -291,46 +314,63 @@ pub fn main(init: std.process.Init) !void {
     }
 }
 
-/// Loads image (resize if necessary), bitmask, neighbors, etc. Updates footer_msg if encounters error.
-///
-/// NOTE: Will pause the play.
-fn procImgAndUpdateError(allocator: Allocator, io: std.Io, rng: std.Random, state: *app.AppState, img_path: []const u8) void {
-    state.loadAndProcessImage(allocator, io, img_path) catch |err| switch (err) {
-        img_proc.Error.OutOfMemory => {
-            state.footer_msg = "ERROR: Out of memory.";
-            return;
-        },
-        // NOTE: FileNotFound can only happen from bad CLI usage.
-        img_proc.Error.FileNotFound, img_proc.LoadError.AccessDenied => {
-            state.footer_msg = "ERROR: File not found or access denied.";
-            return;
-        },
-        img_proc.Error.Unsupported => {
-            state.footer_msg = "ERROR: File or format not supported.";
-            return;
-        },
-        img_proc.Error.Failed => {
-            state.footer_msg = "ERROR: Failed to load image.";
-            return;
-        },
-        img_proc.Error.NoEdges => {
-            state.footer_msg = "Exception: Image has no edges.";
-            return;
-        },
-        else => unreachable,
-    };
+fn loadImageAndUpdateError(
+    allocator: Allocator,
+    io: std.Io,
+    state: *app.AppState,
+    img_path: []const u8,
+) img_proc.Error!void {
+    state.loadResizedImage(allocator, io, img_path) catch |err| {
+        switch (err) {
+            img_proc.Error.OutOfMemory => {
+                state.footer_msg = "ERROR: Out of memory.";
+            },
+            // NOTE: FileNotFound can only happen from bad CLI usage.
+            img_proc.Error.FileNotFound, img_proc.LoadError.AccessDenied => {
+                state.footer_msg = "ERROR: File not found or access denied.";
+            },
+            img_proc.Error.Unsupported => {
+                state.footer_msg = "ERROR: File or format not supported.";
+            },
+            img_proc.Error.Failed => {
+                state.footer_msg = "ERROR: Failed to load image.";
+            },
+            else => {
+                var fmt_buf: [512]u8 = undefined;
+                state.footer_msg = std.mem.printSentinel(fmt_buf[0..], "FATAL ERROR: {s}", .{@errorName(err)}, 0) catch unreachable;
+            },
+        }
 
-    state.footer_msg = null;
-    loadParticlesAndUpdateError(allocator, rng, state);
+        return err;
+    };
 }
 
-/// Loads particles in the soa.
+fn loadNeighborsAndUpdateError(allocator: Allocator, state: *app.AppState) img_proc.LoadError!void {
+    state.loadNeighbors(allocator) catch |err| {
+        switch (err) {
+            img_proc.LoadError.OutOfMemory => {
+                state.footer_msg = "ERROR: Out of memory.";
+            },
+            img_proc.LoadError.NoEdges => {
+                state.footer_msg = "Exception: Image has no edges.";
+            },
+            else => {
+                var fmt_buf: [512]u8 = undefined;
+                state.footer_msg = std.mem.printSentinel(fmt_buf[0..], "FATAL ERROR: {s}", .{@errorName(err)}, 0) catch unreachable;
+            },
+        }
+
+        return err;
+    };
+}
+
+/// Loads particles in the SOA.
 ///
 /// NOTE: Will pause the play.
-fn loadParticlesAndUpdateError(allocator: Allocator, rng: std.Random, state: *app.AppState) void {
+fn loadParticlesAndUpdateError(allocator: Allocator, rng: std.Random, state: *app.AppState) Allocator.Error!void {
     state.loadParticles(allocator, rng) catch {
         state.footer_msg = "ERROR: Out of memory.";
-        return;
+        return Allocator.Error.OutOfMemory;
     };
 
     state.anim_status = .paused;

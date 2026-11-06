@@ -5,6 +5,8 @@
 
 const std = @import("std");
 
+const zigimg = @import("zigimg");
+
 const bitmaster = @import("bitmaster.zig");
 const img_proc = @import("img_proc.zig");
 const physics = @import("physics.zig");
@@ -18,28 +20,30 @@ pub const AnimationStatus = enum {
 };
 
 pub const AppState = struct {
-    image_loaded: bool = false,
-    show_outline: bool = false,
-
+    // Image specific
+    img: ?zigimg.Image = null,
     img_w: u32,
     img_h: u32,
+    edge_bitmask: ?bitmaster.BitSet = null,
+    max_img_len: u32 = 400,
 
-    edge_tolerance: u8 = 220,
-    delta_sq: f32 = 10.0,
-
-    canvas_w: u32,
-    canvas_h: u32,
-
-    particle_count: u32,
-
-    img_bitmask: ?bitmaster.BitSet = null,
-    neighbors_map: ?bitmaster.NeighborMap = null,
-
+    // Particles specific
     particles: ?physics.ParticleSystem = null,
+    particle_count: u32,
+    edge_tolerance: u8 = 220,
+    dist_delta_sq: f32 = 10.0,
+    neighbors_map: ?bitmaster.NeighborMap = null,
+    radius: u32 = 2,
 
-    fps: u8 = 30,
+    // UI config
+    show_outline: bool = false,
     anim_status: AnimationStatus = .none,
     footer_msg: ?[:0]const u8 = null, // TODO: move this out
+
+    // Non-UI App config
+    canvas_w: u32,
+    canvas_h: u32,
+    fps: u8 = 30,
 
     const Self = @This();
 
@@ -53,12 +57,7 @@ pub const AppState = struct {
         };
     }
 
-    pub fn loadAndProcessImage(
-        self: *Self,
-        allocator: Allocator,
-        io: std.Io,
-        path: []const u8,
-    ) img_proc.Error!void {
+    pub fn loadResizedImage(self: *Self, allocator: Allocator, io: std.Io, path: []const u8) img_proc.Error!void {
         var image = img_proc.loadImage(allocator, io, path) catch |err| switch (err) {
             img_proc.LoadError.Unsupported,
             img_proc.LoadError.FileNotFound,
@@ -97,41 +96,41 @@ pub const AppState = struct {
 
         // NOTE: IMAGE WILL BE SQUARE FROM HERE ONWARDS
 
-        if (image.width > 400) {
-            const new_w: usize = 400;
+        if (image.width > self.max_img_len) {
+            const new_w: usize = self.max_img_len;
             const new_h: usize = new_w;
-            // const new_w: usize = 400;
-            // const h_to_w: f32 = @as(f32, @floatFromInt(image.height)) / @as(f32, @floatFromInt(image.width));
-            // const new_h: usize = @intFromFloat(@as(f32, new_w) * h_to_w);
 
-            const new_img = try img_proc.resize_small(allocator, &image, new_w, new_h);
+            const resized_img = try img_proc.resizeSmall(allocator, &image, new_w, new_h);
             image.deinit(allocator);
-            image = new_img;
+            image = resized_img;
         }
-        defer image.deinit(allocator);
 
-        self.img_w = @intCast(image.width);
-        self.img_h = @intCast(image.height);
+        self.img = image;
+        self.img_w = @intCast(self.img.?.width);
+        self.img_h = @intCast(self.img.?.height);
+    }
 
-        const bitmask = img_proc.edgeFilteredBitmask(allocator, image, self.edge_tolerance) catch {
-            return img_proc.LoadError.OutOfMemory;
-        };
+    pub fn loadNeighbors(self: *Self, allocator: Allocator) img_proc.LoadError!void {
+        var bitmask = try img_proc.edgeFilteredBitmask(allocator, &self.img.?, self.edge_tolerance);
+        errdefer bitmask.deinit(allocator);
 
         if (bitmask.count() == 0) {
             return img_proc.LoadError.NoEdges;
         }
 
-        self.img_bitmask = bitmask;
-        const neighbors_map: bitmaster.NeighborMap = try .initAndFill(allocator, bitmask, self.img_w, self.img_h, 2);
+        const neighbors_map: bitmaster.NeighborMap = try .initAndFill(
+            allocator,
+            bitmask,
+            self.img_w,
+            self.img_h,
+            self.radius,
+        );
+        self.edge_bitmask = bitmask;
         self.neighbors_map = neighbors_map;
-        self.image_loaded = true;
     }
 
     pub fn loadParticles(self: *Self, allocator: Allocator, rng: std.Random) Allocator.Error!void {
-        const particle_system = physics.ParticleSystem.init(allocator, rng, self) catch |err| {
-            self.image_loaded = false;
-            return err;
-        };
+        const particle_system: physics.ParticleSystem = try .init(allocator, rng, self);
         self.particles = particle_system;
     }
 
@@ -145,17 +144,24 @@ pub const AppState = struct {
         }
     }
 
+    pub fn unloadEdgeBitmask(self: *Self, allocator: Allocator) void {
+        if (self.edge_bitmask) |*b| {
+            b.deinit(allocator);
+            self.edge_bitmask = null;
+        }
+    }
+
     /// Attempts to unload an image.
     ///
     /// Safe to call even if no image is loaded.
     pub fn unloadImage(self: *Self, allocator: Allocator) void {
-        self.image_loaded = false;
-
-        if (self.img_bitmask) |*b| {
-            b.deinit(allocator);
-            self.img_bitmask = null;
+        if (self.img) |*img| {
+            img.deinit(allocator);
+            self.img = null;
         }
+    }
 
+    pub fn unloadNeighbors(self: *Self, allocator: Allocator) void {
         if (self.neighbors_map) |*n| {
             n.deinit(allocator);
             self.neighbors_map = null;

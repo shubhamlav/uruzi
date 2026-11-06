@@ -6,7 +6,6 @@
 const std = @import("std");
 
 const zigimg = @import("zigimg");
-const zignal = @import("zignal");
 
 const bitmaster = @import("bitmaster.zig");
 
@@ -21,15 +20,10 @@ pub const ResizeError = error{IncompatibleDimension} || Allocator.Error || zigim
 
 pub const Error = LoadError || ResizeError;
 
-pub fn loadImage(allocator: Allocator, io: std.Io, path: []const u8) LoadError!zigimg.Image {
-    var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    return try zigimg.Image.fromFilePath(allocator, io, path, read_buffer[0..]);
-}
-
 /// Grayscales the image, runs it through a sobel, returns the bitmask.
 pub fn edgeFilteredBitmask(
     gpa: Allocator,
-    image: zigimg.Image,
+    image: *zigimg.Image,
     tolerance: u8,
 ) Allocator.Error!bitmaster.BitSet {
     var grayscaled: []u8 = try gpa.alloc(u8, image.width * image.height);
@@ -58,6 +52,44 @@ pub fn edgeFilteredBitmask(
 
     return bitmask;
 }
+
+pub fn loadImage(allocator: Allocator, io: std.Io, path: []const u8) LoadError!zigimg.Image {
+    var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+    return try zigimg.Image.fromFilePath(allocator, io, path, read_buffer[0..]);
+}
+
+/// Loads and crops an image as a square.
+// pub fn loadSquareImage(allocator: Allocator, io: std.Io, path: []const u8) LoadError!zigimg.Image {
+//     var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+//     var image = try zigimg.Image.fromFilePath(allocator, io, path, read_buffer[0..]);
+//
+//     if (image.width != image.height) {
+//         var len: usize = undefined;
+//         var x: usize = undefined;
+//         var y: usize = undefined;
+//
+//         if (image.width < image.height) {
+//             len = image.width;
+//             x = 0;
+//             y = (image.height - len) / 2;
+//         } else {
+//             len = image.height;
+//             x = (image.width - len) / 2;
+//             y = 0;
+//         }
+//
+//         const cropped_img = try image.crop(allocator, .{
+//             .x = x,
+//             .y = y,
+//             .width = len,
+//             .height = len,
+//         });
+//         image.deinit(allocator);
+//         image = cropped_img;
+//     }
+//
+//     return image;
+// }
 
 fn sobel(
     allocator: Allocator,
@@ -118,7 +150,7 @@ fn sobel(
 
 /// Return a scaled down version of the input image by mapping the avg of a rectangular kernel from
 /// the bigger input image to the scaled down output/return image.
-pub fn resize_small(allocator: Allocator, image: *zigimg.Image, w: usize, h: usize) ResizeError!zigimg.Image {
+pub fn resizeSmall(allocator: Allocator, image: *zigimg.Image, w: usize, h: usize) ResizeError!zigimg.Image {
     if (w >= image.width or h >= image.height) {
         return ResizeError.IncompatibleDimension;
     }

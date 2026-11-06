@@ -41,7 +41,7 @@ pub const ParticleSystem = struct {
             const py = rng.float(f32) * canvas_h_f32;
             const pos = rl.Vector2{ .x = px, .y = py };
 
-            const pixel_idx = bitmaster.randomBitmaskIndex(rng, app_state.img_bitmask.?) catch unreachable;
+            const pixel_idx = bitmaster.randomBitmaskIndex(rng, app_state.edge_bitmask.?) catch unreachable;
             const cell_w: f32 = canvas_w_f32 / @as(f32, @floatFromInt(img_w));
             const cell_h: f32 = canvas_h_f32 / @as(f32, @floatFromInt(img_h));
 
@@ -92,7 +92,7 @@ pub const ParticleSystem = struct {
 
             // If pixel is almost near the pixel, then it has reached its destination. Update the
             // pixel to be chased to be a neighbor pixel.
-            if (dest.* != null and dest.*.?.subtract(pos.*).lengthSqr() <= app_state.delta_sq) {
+            if (dest.* != null and dest.*.?.subtract(pos.*).lengthSqr() <= app_state.dist_delta_sq) {
                 const neighbors = app_state.neighbors_map.?.get(pixel_idx.*.?).?;
 
                 const new_pixel_idx = bitmaster.randomBitmaskIndex(rng, neighbors) catch {
