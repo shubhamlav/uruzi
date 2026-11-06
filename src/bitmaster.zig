@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Shubham LaV. All Rights Reserved.
 //
 // Email: lav@brainiacs.in
-// GitHub: ShubhamVG
+// GitHub: ShubhamLaV
 
 const std = @import("std");
 

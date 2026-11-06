@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Shubham LaV. All Rights Reserved.
 //
 // Email: lav@brainiacs.in
-// GitHub: ShubhamVG
+// GitHub: ShubhamLaV
 
 const builtin = @import("builtin");
 const std = @import("std");
@@ -36,11 +36,7 @@ pub fn main(init: std.process.Init) !void {
         .allocator = gpa,
         .assignment_separators = "=",
     }) catch |err| {
-        // TODO: Check if this fails on WASM cuz of stderr
-        var buffer: [512]u8 = undefined;
-        var stderr_writer = std.Io.File.stderr().writer(io, &buffer);
-        const buffered_stderr = &stderr_writer.interface;
-        try diag.report(buffered_stderr, err);
+        try diag.reportToFile(io, .stderr(), err);
         try cli.printHelp(io, .stderr());
         std.process.exit(1);
     };
@@ -48,7 +44,6 @@ pub fn main(init: std.process.Init) !void {
 
     // If help flag, print usage and exit.
     if (res.args.help != 0) {
-        // TODO: Check if this fails on WASM cuz of stdout
         try cli.printHelp(io, .stdout());
         return;
     }
