@@ -5,20 +5,20 @@
 
 const std = @import("std");
 
-const app = @import("app.zig");
-
 pub const BitmaskError = error{NoSetBit};
+pub const BitSet = std.bit_set.Dynamic;
 
 const Allocator = std.mem.Allocator;
-// const MapType = std.AutoArrayHashMap(usize, std.DynamicBitSet);
+const MapType = std.AutoHashMap(usize, BitSet);
 
 pub const NeighborMap = struct {
-    map: std.AutoHashMap(usize, std.DynamicBitSet),
+    map: MapType,
+
     const Self = @This();
 
-    pub fn initAndFill(allocator: Allocator, bitmask: std.DynamicBitSet, app_state: app.AppState) Allocator.Error!Self {
+    pub fn initAndFill(allocator: Allocator, bitmask: BitSet, img_w: u32, img_h: u32, radius: u32) Allocator.Error!Self {
         // Get the neighbors of the set bits represented as another bitmask
-        var neighbor_map = std.AutoHashMap(usize, std.DynamicBitSet).init(allocator);
+        var neighbor_map: MapType = .init(allocator);
         try neighbor_map.ensureTotalCapacity(@intCast(bitmask.count()));
 
         // If (x, y) is a set bit, then draw a square around it, all the set bits inside that
@@ -27,29 +27,27 @@ pub const NeighborMap = struct {
         var iter = bitmask.iterator(.{ .kind = .set });
         while (iter.next()) |pixel_idx| {
             // TODO: make this be fetched from app_state.
-            const dist_x = 2;
-            const dist_y = 2;
+            const dist_x = radius;
+            const dist_y = radius;
 
-            const img_w_usize: usize = @intCast(app_state.img_w);
-            const img_h_usize: usize = @intCast(app_state.img_h);
+            // const img_w_usize: usize = @intCast(img_w);
+            // const img_h_usize: usize = @intCast(img_h);
 
-            const pix_y = pixel_idx / img_w_usize;
-            const pix_x = pixel_idx % img_w_usize;
-            // const pix_y = pixel_idx / app_state.img_w;
-            // const pix_x = pixel_idx % app_state.img_w;
+            const pix_y = pixel_idx / img_w;
+            const pix_x = pixel_idx % img_w;
+
             const min_x = if (dist_x >= pix_x) 0 else pix_x - dist_x;
-            const max_x = @min(pix_x + dist_x, img_w_usize - 1);
-            // const max_x = @min(pix_x + dist_x, app_state.img_w - 1);
+            const max_x = @min(pix_x + dist_x, img_w - 1);
+
             const min_y = if (dist_y >= pix_y) 0 else pix_y - dist_y;
-            const max_y = @min(pix_y + dist_y, img_h_usize - 1);
+            const max_y = @min(pix_y + dist_y, img_h - 1);
 
             // Thanks to [lambda-abstraction on GitHub] aka [programming_enjoyer on Discord] for
-            // fixing the left-bias bug!
-            // var neighbor_bitmask = try std.DynamicBitSet.initEmpty(allocator, app_state.img_w * app_state.img_h);
-            var neighbor_bitmask = try std.DynamicBitSet.initEmpty(allocator, img_w_usize * img_h_usize);
+            // fixing the left-bias bug in zig 0.15!
+            var neighbor_bitmask: BitSet = try .initEmpty(allocator, img_w * img_h);
             for (min_y..max_y + 1) |y| {
                 for (min_x..max_x + 1) |x| {
-                    const idx = x + y * img_w_usize;
+                    const idx = x + y * img_w;
                     if (idx != pixel_idx and bitmask.isSet(idx)) {
                         neighbor_bitmask.set(idx);
                     }
@@ -62,20 +60,20 @@ pub const NeighborMap = struct {
         return .{ .map = neighbor_map };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *Self, allocator: Allocator) void {
         var map_iter = self.map.iterator();
         while (map_iter.next()) |entry| {
-            entry.value_ptr.deinit();
+            entry.value_ptr.deinit(allocator);
         }
         self.map.deinit();
     }
 
-    pub fn get(self: Self, key: usize) ?std.DynamicBitSet {
+    pub fn get(self: Self, key: usize) ?BitSet {
         return self.map.get(key);
     }
 };
 
-pub fn randomBitmaskIndex(rng: std.Random, bitmask: std.DynamicBitSet) BitmaskError!usize {
+pub fn randomBitmaskIndex(rng: std.Random, bitmask: BitSet) BitmaskError!usize {
     if (bitmask.count() == 0) {
         return BitmaskError.NoSetBit;
     }

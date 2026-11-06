@@ -8,6 +8,8 @@ const std = @import("std");
 const zigimg = @import("zigimg");
 const zignal = @import("zignal");
 
+const bitmaster = @import("bitmaster.zig");
+
 const Allocator = std.mem.Allocator;
 
 pub const LoadError = error{
@@ -26,12 +28,12 @@ pub fn loadImage(allocator: Allocator, io: std.Io, path: []const u8) LoadError!z
 
 /// Grayscales the image, runs it through a sobel, returns the bitmask.
 pub fn edgeFilteredBitmask(
-    allocator: Allocator,
+    gpa: Allocator,
     image: zigimg.Image,
     tolerance: u8,
-) Allocator.Error!std.DynamicBitSet {
-    var grayscaled: []u8 = try allocator.alloc(u8, image.width * image.height);
-    defer allocator.free(grayscaled);
+) Allocator.Error!bitmaster.BitSet {
+    var grayscaled: []u8 = try gpa.alloc(u8, image.width * image.height);
+    defer gpa.free(grayscaled);
 
     var i: usize = 0;
     var iterator = image.iterator();
@@ -43,11 +45,11 @@ pub fn edgeFilteredBitmask(
         i += 1;
     }
 
-    const sobelled = try sobel(allocator, grayscaled, image.width, image.height);
-    defer allocator.free(sobelled);
+    const sobelled = try sobel(gpa, grayscaled, image.width, image.height);
+    defer gpa.free(sobelled);
 
     const size = image.width * image.height;
-    var bitmask = try std.DynamicBitSet.initEmpty(allocator, size);
+    var bitmask: bitmaster.BitSet = try .initEmpty(gpa, size);
     for (0.., sobelled) |bitidx, v| {
         if (v >= tolerance) {
             bitmask.set(bitidx);
@@ -76,20 +78,6 @@ fn sobel(
         const start = (y * width) - 1;
         @memset(buffer[start .. start + 2], 0);
     }
-
-    // for (0..width) |x| {
-    //     const top = x;
-    //     const bottom = (height - 1) * width + x;
-    //     buffer[top] = 0;
-    //     buffer[bottom] = 0;
-    // }
-
-    // for (1..height) |y| {
-    //     const left = y * width;
-    //     const right = (y + 1) * width - 1;
-    //     buffer[left] = 0;
-    //     buffer[right] = 0;
-    // }
 
     // Everything guaranteed to be in bounds. The "hot loop".
     for (1..height - 1) |y| {

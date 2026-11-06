@@ -57,7 +57,7 @@ pub fn main(init: std.process.Init) !void {
         if (res.args.particles) |p_count| p_count else 900,
     );
     defer {
-        state.unloadImage();
+        state.unloadImage(gpa);
         state.unloadParticles(gpa);
     }
 
@@ -246,7 +246,7 @@ pub fn main(init: std.process.Init) !void {
             // TODO: Get the footer to say "loading image".
             const img_path = try nfd.openFileDialog("png,jpg,jpeg,qoi,bmp", null);
             if (img_path != null) {
-                state.unloadImage();
+                state.unloadImage(gpa);
                 state.unloadParticles(gpa);
                 procImgAndUpdateError(gpa, io, rng, &state, img_path.?);
             }

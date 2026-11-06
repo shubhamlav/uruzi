@@ -32,7 +32,7 @@ pub const AppState = struct {
 
     particle_count: u32,
 
-    img_bitmask: ?std.DynamicBitSet = null,
+    img_bitmask: ?bitmaster.BitSet = null,
     neighbors_map: ?bitmaster.NeighborMap = null,
 
     particles: ?physics.ParticleSystem = null,
@@ -122,8 +122,8 @@ pub const AppState = struct {
         }
 
         self.img_bitmask = bitmask;
-        const neighbor_map = try bitmaster.NeighborMap.initAndFill(allocator, bitmask, self.*);
-        self.neighbors_map = neighbor_map;
+        const neighbors_map: bitmaster.NeighborMap = try .initAndFill(allocator, bitmask, self.img_w, self.img_h, 2);
+        self.neighbors_map = neighbors_map;
         self.image_loaded = true;
     }
 
@@ -148,15 +148,16 @@ pub const AppState = struct {
     /// Attempts to unload an image.
     ///
     /// Safe to call even if no image is loaded.
-    pub fn unloadImage(self: *Self) void {
+    pub fn unloadImage(self: *Self, allocator: Allocator) void {
         self.image_loaded = false;
 
         if (self.img_bitmask) |*b| {
-            b.deinit();
+            b.deinit(allocator);
             self.img_bitmask = null;
         }
+
         if (self.neighbors_map) |*n| {
-            n.deinit();
+            n.deinit(allocator);
             self.neighbors_map = null;
         }
     }
